@@ -27,12 +27,23 @@ if __name__ == "__main__":
 
       # luego recibimos el mensaje usando la función que programamos
       # received_message = receive_full_mesage(connection, buff_size, '\r\n\r\n')
-      received_message = receive_head(connection, buff_size)
+      received_message = receive_and_parse_http_message(connection, buff_size, 'request')
+      print(received_message)
 
-      print(parse_head(received_message, 'request'))
+      response_body = "<div>Bienvenido</div>"
+
+      response_message = create_http_msg(HTTPMessage("response", 
+        start_line={"http_version": str(received_message.start_line["http_version"]), 
+                    "status_code": "200", 
+                    "status_text": "OK"},
+        headers={"Content-Type": "text/html; charset=UTF-8", 
+                 "Content-Length": str(len(response_body.encode()))},
+        body=response_body))
+
+      # print(response_message)
 
       # respondemos
-      response_message = (received_message).encode()
+      response_message = (response_message).encode()
       connection.send(response_message)
 
       # cerramos la conexión
