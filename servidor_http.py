@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import socket
+import sys
+import json
 from utitlities import *
 
 
@@ -21,34 +23,45 @@ if __name__ == "__main__":
   server_socket.listen(3)
 
   while True:
+
       # cuando llega una petición de conexión la aceptamos
       # y sacamos los datos de la conexión entrante (objeto, dirección)
       connection, address = server_socket.accept()
 
-      # luego recibimos el mensaje usando la función que programamos
-      # received_message = receive_full_mesage(connection, buff_size, '\r\n\r\n')
-      received_message = receive_and_parse_http_message(connection, buff_size, 'request')
-      print(received_message)
+      if len(sys.argv) > 1:
 
-      response_body = "<div>Bienvenido</div>"
+        # Si recibimos un archivo json por consola leemos sus contenido
+        # y lo parseamos.
+        f = open(sys.argv[1])
+        data = json.load(f)
+        f.close()
 
-      response_message = create_http_msg(HTTPMessage("response", 
-        start_line={"http_version": str(received_message.start_line["http_version"]), 
-                    "status_code": "200", 
-                    "status_text": "OK"},
-        headers={"Content-Type": "text/html; charset=UTF-8", 
-                 "Content-Length": str(len(response_body.encode()))},
-        body=response_body))
+        mail = data["mail"]
 
-      # print(response_message)
+        # luego recibimos el mensaje usando la función que programamos
+        # received_message = receive_full_mesage(connection, buff_size, '\r\n\r\n')
+        received_message = receive_and_parse_http_message(connection, buff_size, 'request')
 
-      # respondemos
-      response_message = (response_message).encode()
-      connection.send(response_message)
+        response_body = "<div>Bienvenido</div>"
 
-      # cerramos la conexión
-      # notar que la dirección que se imprime indica un número de puerto distinto al 8888
-      connection.close()
-      print("conexión con " + str(address) + " ha sido cerrada")
+        response_message = create_http_msg(HTTPMessage("response", 
+          start_line={"http_version": str(received_message.start_line["http_version"]), 
+                      "status_code": "200", 
+                      "status_text": "OK"},
+          headers={"Content-Type": "text/html; charset=UTF-8", 
+                  "Content-Length": str(len(response_body.encode())),
+                  "X-ElQuePregunta": mail},
+          body=response_body))
 
-      # seguimos esperando por si llegan otras conexiones
+        # print(response_message)
+
+        # respondemos
+        response_message = (response_message).encode()
+        connection.send(response_message)
+
+        # cerramos la conexión
+        # notar que la dirección que se imprime indica un número de puerto distinto al 8888
+        connection.close()
+        print("conexión con " + str(address) + " ha sido cerrada")
+
+        # seguimos esperando por si llegan otras conexiones
