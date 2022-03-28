@@ -12,7 +12,7 @@ class HTTPMessage:
   headers: dict
   body: str
  
-def receive_head(connection_socket: socket, buff_size: int) -> str:
+def receive_head(connection_socket: socket, buff_size: int) -> tuple[str, str]:
   """Funcion que dado un socket y un tamaño de buffer, recibe solo el HEAD de un
   mensaje http.
 
@@ -27,14 +27,18 @@ def receive_head(connection_socket: socket, buff_size: int) -> str:
   # recibimos la primera parte del mensaje
   buffer = connection_socket.recv(buff_size)
   end_sequence = '\r\n\r\n'
-  head = buffer.decode()
+  head = buffer.decode('latin')
 
   head_is_complete = contains_end_of_message(head, end_sequence)
+
+  first_part_body: str
 
   # si el HEAD están completos (o sea que contienes la secuencia "\r\n\r\n") removemos 
   # la secuencia de fin de mensaje
   if head_is_complete:
-      head = head[0:(len(head) - len("\r\n\r\n"))]
+      first_part_body = head[(head.find(end_sequence) + len(end_sequence)):]
+      head = head[0:head.find(end_sequence)]
+      
 
   # si el HEAD no están completos (no contienen la secuencia "\r\n\r\n")
   else:
@@ -44,18 +48,19 @@ def receive_head(connection_socket: socket, buff_size: int) -> str:
           # recibimos un nuevo trozo del mensaje
           buffer = connection_socket.recv(buff_size)
           # y lo añadimos al HEAD "completo"
-          head += buffer.decode()
+          head += buffer.decode('latin')
 
           # verificamos si es la última parte del HEAD
           head_is_complete = contains_end_of_message(head, end_sequence)
           if head_is_complete:
               # removemos la secuencia de fin de HEAD
-              head = head[0:(len(head) - len(end_sequence))]
+              first_part_body = head[(head.find(end_sequence) + len(end_sequence)):]
+              head = head[0:head.find(end_sequence)]
 
-  # finalmente retornamos el HEAD
-  return head
+  # finalmente retornamos el HEAD junto a la primera parte del body
+  return head, first_part_body
 
-def receive_body(connection_socket: socket, content_length: int, buff_size: int) -> str:
+def receive_body(connection_socket: socket, content_length: int, buff_size: int, first_part_body: str) -> str:
   """Funcion que dado un socket y un tamaño de buffer, recibe un mensaje de
   largo content_length (en bytes) desde el socket (correspondiente al BODY de un
   mensaje http).
@@ -68,12 +73,14 @@ def receive_body(connection_socket: socket, content_length: int, buff_size: int)
   Returns:
   (str): Mensaje de largo content_length (en bytes) recibido desde el socket. 
   """
-  body: str = ""
-  bytes_processed: int = 0
+  body: str = first_part_body
+  bytes_processed: int = len(first_part_body.encode())
   while bytes_processed < content_length:
     buffer = connection_socket.recv(buff_size)
     bytes_processed += len(buffer)
-    body += buffer.decode()
+    body += buffer.decode('latin')
+  
+  print(body)
   return body
 
 def parse_head(raw_head: str, message_type: str) -> HTTPMessage:
@@ -106,22 +113,19 @@ def parse_body(raw_body: str, http_msg: HTTPMessage) -> HTTPMessage:
   return http_msg
 
 def receive_and_parse_http_message(connection_socket: socket, buff_size: int, message_type: str) -> HTTPMessage:
-  raw_head = receive_head(connection_socket, buff_size)
+  raw_head, first_part_body = receive_head(connection_socket, buff_size)
   try :
     http_msg = parse_head(raw_head, message_type)
   except InvalidHTTPMessageType as e:
     print(repr(e))
   else:
     if "Content-Length" in http_msg.headers.keys():
-      raw_body = receive_body(connection_socket, int(http_msg.headers["Content-Length"]), buff_size)
+      raw_body = receive_body(connection_socket, int(http_msg.headers["Content-Length"]), buff_size, first_part_body)
       http_msg = parse_body(raw_body, http_msg)
     return http_msg
 
 def contains_end_of_message(message, end_sequence):
-  if end_sequence == message[(len(message) - len(end_sequence)):len(message)]:
-      return True
-  else:
-      return False
+  return False if message.find(end_sequence) == -1 else True
 
 def create_http_msg(http_msg: HTTPMessage) -> str:
   # Reconstruimos el string correspondiente a la start line del mensaje.
