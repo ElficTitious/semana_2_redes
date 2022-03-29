@@ -6,9 +6,8 @@ import json
 from utilities import *
 
 
-
 if __name__ == "__main__":
-  buff_size = 64
+  buff_size = 1024
   address = ('localhost', 8888)
 
   # armamos el socket
@@ -36,39 +35,58 @@ if __name__ == "__main__":
         # Si recibimos un archivo json por consola leemos sus contenido
         # y lo parseamos, de no resultar arrojamos un error.
         f = open(sys.argv[1])
-        data = json.load(f)
+        config = json.load(f)
         f.close()
 
       except:
         print("Error when trying to read config file")
 
       else:
-        mail = data["mail"]
 
-        # Agregamos nuestro correo a los headers del request
-        received_request.headers["X-ElQuePregunta"] = mail
+        if received_request.start_line['resource'] in config['blocked']:
+          
+          body = "<h1>Error 403, Blocked address</h1>"
 
-        # Lo transformamos nuevamente a formato http
-        received_request = create_http_msg(received_request)
+          response = create_http_msg(HTTPMessage(
+            message_type='response',
+            start_line={'http_version':received_request.start_line['http_version'],
+                        'status_code':'403',
+                        'status_text':'Blocked address'},
+            headers={'Content-Length':str(len(body.encode()))},
+            body=body
+          ))
+          response = response.encode()
+          client_connection.send(response)
+        
+        else:
 
-        # Y lo redireccionamos al servidor, para lo cual primero es necesario crear un socket
-        # y asociarlo al host recibido en el request
+          # Agregamos nuestro correo a los headers del request
+          received_request.headers["X-ElQuePregunta"] = config["user"]
 
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.connect((host, 80))
+          # Lo transformamos nuevamente a formato http
+          received_request = create_http_msg(received_request)
 
-        received_request = (received_request).encode()
-        server_socket.send(received_request)
+          # Y lo redireccionamos al servidor, para lo cual primero es necesario crear un socket
+          # y asociarlo al host recibido en el request
 
-        received_response = receive_and_parse_http_message(server_socket, buff_size, 'response')
+          server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          server_socket.connect((host, 80))
 
-        received_response = create_http_msg(received_response)
-        received_response = (received_response).encode()
-        client_connection.send(received_response)
-        # cerramos la conexión
-        # notar que la dirección que se imprime indica un número de puerto distinto al 8888
+          received_request = (received_request).encode()
+          server_socket.send(received_request)
 
-        # seguimos esperando por si llegan otras conexiones
+          received_response = receive_and_parse_http_message(server_socket, buff_size, 'response')
 
-        server_socket.close()
-        client_socket.close()
+          received_response.redact(config['forbidden_words'])
+
+          received_response = create_http_msg(received_response)
+          received_response = (received_response).encode()
+          client_connection.send(received_response)
+          # cerramos la conexión
+          # notar que la dirección que se imprime indica un número de puerto distinto al 8888
+
+          # seguimos esperando por si llegan otras conexiones
+
+          server_socket.close()
+
+        client_connection.close()

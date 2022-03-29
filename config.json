@@ -1,3 +1,9 @@
 {
-  "mail": "ismael.correa.a@ug.uchile.cl"
+  "user": "ismael.correa.a@ug.uchile.cl",
+  "blocked": ["http://www.dcc.uchile.cl/", "http://cc4303.bachmann.cl/secret"],
+  "forbidden_words": [
+    { "proxy": "[REDACTED]" },
+    { "DCC": "[FORBIDDEN]" },
+    { "biblioteca": "[???]" }
+  ]
 }
